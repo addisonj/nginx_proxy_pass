@@ -13,6 +13,38 @@ if [ -n "$DISABLE_SSL_VERIFY" ]; then
   disableVerify="proxy_ssl_verify       off;"
 fi
 
+if [ -z "$TCP_PROXY" ]; then
+  cat << EOF > /etc/nginx/conf.d/http_proxy.conf
+server {
+  listen $listenPort;
+  listen [::]:$listenPort;
+
+  server_name $serverName;
+
+  location / {
+      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+      proxy_set_header X-Real-IP \$remote_addr;
+      proxy_set_header Host \$host;
+      proxy_ssl_server_name on;
+      proxy_ssl_session_reuse on;
+      $disableVerify
+      proxy_pass $upstream;
+  }
+}
+EOF
+else
+  cat << EOF > /etc/nginx/stream.d/tcp_proxy.conf
+upstream backend {
+   server $upstream;
+}
+
+server {
+  listen $listenPort;
+  proxy_pass backend;
+}
+EOF
+fi
+
 cat << EOF > /etc/nginx/nginx.conf
 
 user  nginx;
@@ -43,30 +75,24 @@ http {
 
     #gzip  on;
 
-    server {
-      listen $listenPort;
-      listen [::]:$listenPort;
+    include /etc/nginx/conf.d/*.conf;
+}
 
-      server_name $serverName;
+stream {
+    log_format main '\$remote_addr [\$time_local] '
+                 '\$protocol \$bytes_sent \$bytes_received '
+                 '\$session_time "\$upstream_addr" '
+                 '"\$upstream_bytes_sent" "\$upstream_bytes_received" "\$upstream_connect_time"';
 
-      location / {
-          proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-          proxy_set_header X-Real-IP \$remote_addr;
-          proxy_set_header Host \$host;
-          proxy_ssl_server_name on;
-          proxy_ssl_session_reuse on;
-          $disableVerify
-          proxy_pass $upstream;
+    access_log /var/log/nginx/access.log  main;
+    error_log  /var/log/nginx/error.log;
 
-      }
-    }
-  }
-
-
+    include /etc/nginx/stream.d/*.conf;
+}
 EOF
 
 echo "starting nginx on $listenPort with conf:"
 
-cat /etc/nginx/nginx.conf
+cat /etc/nginx/nginx.conf /etc/nginx/conf.d/*.conf /etc/nginx/stream.d/*.conf
 
 exec nginx -g "daemon off;"
