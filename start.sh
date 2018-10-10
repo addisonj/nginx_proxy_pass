@@ -7,6 +7,7 @@ if [ -z "$UPSTREAM_SERVER" ]; then
 fi
 upstream=${UPSTREAM_SERVER}
 echo "setting $serverName to proxy to $upstream"
+listenPort=${PORT:-${PORT0:-80}}
 
 cat << EOF > /etc/nginx/nginx.conf
 
@@ -40,8 +41,8 @@ http {
     #gzip  on;
 
     server {
-      listen 80;
-      listen [::]:80;
+      listen $listenPort;
+      listen [::]:$listenPort;
 
       server_name $serverName;
 
@@ -58,6 +59,6 @@ http {
 
 EOF
 
-echo "starting nginx"
+echo "starting nginx on $listenPort"
 
 exec nginx -g "daemon off;"
