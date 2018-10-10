@@ -8,6 +8,10 @@ fi
 upstream=${UPSTREAM_SERVER}
 echo "setting $serverName to proxy to $upstream"
 listenPort=${PORT:-${PORT0:-80}}
+disableVerify=""
+if [ -n "$DISABLE_SSL_VERIFY" ]; then
+  disableVerify="proxy_ssl_verify       off;"
+fi
 
 cat << EOF > /etc/nginx/nginx.conf
 
@@ -24,8 +28,7 @@ events {
 
 
 http {
-    include       /etc/nginx/mime.types;
-    default_type  application/octet-stream;
+    include       /etc/nginx/mime.types; default_type  application/octet-stream;
 
     log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
                       '\$status \$body_bytes_sent "\$http_referer" '
@@ -50,6 +53,9 @@ http {
           proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
           proxy_set_header X-Real-IP \$remote_addr;
           proxy_set_header Host \$host;
+          proxy_ssl_server_name on;
+          proxy_ssl_session_reuse on;
+          $disableVerify
           proxy_pass $upstream;
 
       }
@@ -59,6 +65,8 @@ http {
 
 EOF
 
-echo "starting nginx on $listenPort"
+echo "starting nginx on $listenPort with conf:"
+
+cat /etc/nginx/nginx.conf
 
 exec nginx -g "daemon off;"
